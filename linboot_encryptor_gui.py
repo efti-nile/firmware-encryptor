@@ -1,4 +1,4 @@
-from file_selector import *
+from file_selector_tkwidget import *
 from tkinter import *
 
 

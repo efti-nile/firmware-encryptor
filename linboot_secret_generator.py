@@ -1,12 +1,12 @@
-import os
+import os  # true random
 
 
 def generate_secret(secret_name):
     """
     Secret generator for Linboot
     Outputs two files:
-        binary file *.bin with key and IVC to encrypt firmware before release
-        include file *.inc with key and IVC to build Linboot bootloader
+        binary file *.bin with 256-key and 128-IVC to encrypt firmware before release
+        include file *.inc with 256-key and 128-IVC to build Linboot bootloader
     :param secret_name: output filename
     :return:
     """
