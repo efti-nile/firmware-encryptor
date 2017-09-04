@@ -3,6 +3,7 @@ from tkinter import filedialog
 
 
 class FileSelector(Frame):
+    """ File selector widget for Tk """
     FONT = ('Courier', 12, 'normal')
 
     def __init__(self, parent=None, io='r', text='File:', path='', **configs):
