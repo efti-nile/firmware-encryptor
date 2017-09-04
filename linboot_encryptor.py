@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # encoding=UTF-8
 from pyserpent import Serpent
+from os import urandom
 from binascii import crc32
 from tqdm import *  # progressbar
 import sys  # stderr
@@ -125,7 +126,7 @@ class LinbootHexEncryptor(Serpent):
                     binfile.write(encrypted_block)
                 page_no_bytes = bytes(page_no >> 8 * i & 0xFF for i in range(2))
                 crc32_bytes = bytes(crc32(page_bytes + page_no_bytes) >> 8 * i & 0xFF for i in range(4))
-                block = page_no_bytes + crc32_bytes + bytes(
-                    0x00 for _ in range(self.get_block_size() - len(page_no_bytes) - len(crc32_bytes))
-                )
+                block = page_no_bytes + crc32_bytes\
+                    + urandom(self.get_block_size() - len(page_no_bytes) - len(crc32_bytes))
                 binfile.write(self.block_xor(block, accum))
+
