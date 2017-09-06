@@ -13,7 +13,7 @@ class LinbootHexEncryptor(Serpent):
     Initially developed for AVR firmware hex-files, with other MCU compatibility is unknown.
     Output binary file compatible with linboot-bootloader.
     """
-    PAGE_SIZE = 256  # flash page size, must be multiple by cipher block size (!)
+    PAGE_SIZE = 128  # flash page size, must be multiple by cipher block size (!)
     FILLER = 0xFF  # value for padding unused flash
 
     def __init__(self, key, ivc):
