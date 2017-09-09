@@ -10,6 +10,7 @@ import sys
 class LinbootFlasher(serial.Serial):
     cmd_opcodes = {"version": b'\x01', "init cypher": b'\x02', "write page": b'\x03'}
     message_header_len = 3
+    message_max_len = 148
 
     def __init__(self, *args, framesize=144):
         super().__init__(*args, timeout=1)
@@ -32,8 +33,8 @@ class LinbootFlasher(serial.Serial):
         if self.__command(self.cmd_opcodes["init cipher"]) is None:
             sys.stderr.write("[ERROR  ] No cipher initialization ACK\n")
             return
-        for frame, frame_no in tqdm((fw_image[i*self.framesize:(i+1)*self.framesize], i
-                                     for i in range(len(fw_image)//self.framesize))):
+        for frame, frame_no in tqdm((fw_image[i*self.framesize:(i+1)*self.framesize], i)\
+                                     for i in range(len(fw_image)//self.framesize)):
             if self.__command(self.cmd_opcodes["write page"], frame):
                 sys.stderr.write("[ERROR  ] No written flash page ACK. Page No. {0}\n".format(frame_no))
                 return
@@ -53,28 +54,33 @@ class LinbootFlasher(serial.Serial):
         message = message_header + data
         message += bytes([crc8(message)])
         self.write(message)
-        self.read(len(message))  # skip echoed bytes (bytes echo because-of LIN)
+        # self.read(len(message))  # skip echoed bytes (bytes echo because-of LIN)
 
     def __receive_answer(self, expected_opcode, expected_datalen=None):
-        assert isinstance(expected_opcode, bytes) and len(opcode) == 1
+        assert isinstance(expected_opcode, bytes) and len(expected_opcode) == 1
         if expected_datalen is not None:
-            bytes_to_receive = self.command_header_len + self.expected_datalen + 1
+            assert isinstance(expected_datalen, int)
+            bytes_to_receive = self.message_header_len + self.expected_datalen + 1  # + 1 byte CRC8
         else:
-            bytes_to_receive = self.answer_maxlen
+            bytes_to_receive = self.message_max_len
         answer = self.read(bytes_to_receive)
-        if len(answer) < self.answer_header_len:
+        if len(answer) < self.message_header_len:
             sys.stderr.write("[ERROR  ] Header not received\n")
             return None
-        datalen = ord(answer[0])
-        answer = answer[:self.command_header_len + datalen]
-        if crc8(answer[:-1]) != ord(answer[-1]):
+        datalen = answer[1]
+        answer = answer[:self.message_header_len + datalen + 1]
+        if crc8(answer[:-1]) != answer[-1]:
             sys.stderr.write("[ERROR  ] CRC check failed\n")
             return None
+        lin_add = answer[0]
+        if lin_add != ord(self.lin_address):
+            sys.stderr.write("[ERROR  ] Received message from unexpected LIN address: {0}\n".format(lin_add))
+            return
         if expected_datalen is not None and datalen != expected_datalen:
-            sys.stderr.write("[ERROR  ] Met not expected data length: {0}\n".format(datalen))
+            sys.stderr.write("[ERROR  ] Received message with unexpected data length: {0}\n".format(datalen))
             return None
-        opcode = answer[1]
-        if opcode != expected_opcode:
-            sys.stderr.write("[ERROR  ] Met not expected opcode: {0}\n".format(opcode))
+        opcode = answer[2]
+        if opcode != ord(expected_opcode):
+            sys.stderr.write("[ERROR  ]Received message with unexpected opcode: {0}\n".format(opcode))
             return None
-        return answer[self.command_header_len:self.command_header_len + datalen]
+        return answer[self.message_header_len:self.message_header_len + datalen].decode('utf-8', 'ignore')
