@@ -7,8 +7,9 @@ import argparse
 import sys
 
 # CLI arguments example
-# -i linboot.hex -o linbot-encr.bin -s secret_test.bin encrypt
-# -i linboot-encr.bin --serial COM7 --lin 0x02 flash
+# -i linboot.hex -o linboot-encr.bin -s secret_test.bin encrypt
+# -i linboot-encr.bin --serial COM8 --lin 0x02 flash
+
 
 __version__ = "1.0.0.A"
 prog_name = "Linboot client v. {0:s}".format(__version__)

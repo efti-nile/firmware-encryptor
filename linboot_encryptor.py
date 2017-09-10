@@ -87,13 +87,13 @@ class LinbootHexEncryptor(Serpent):
         data_len = len(data)
         data = iter(data)
         begin_page_no = address // self.PAGE_SIZE
-        end_page_no = (address + data_len) // self.PAGE_SIZE
+        end_page_no = (address + data_len - 1) // self.PAGE_SIZE
         for page_no in range(begin_page_no, end_page_no + 1):
             if page_no not in self.flash:
                 self.flash[page_no] = bytearray(self.FILLER for _ in range(self.PAGE_SIZE))
             if page_no == begin_page_no:
                 for offset in range(address % self.PAGE_SIZE,
-                                    min((address + data_len) % self.PAGE_SIZE, self.PAGE_SIZE + 1)):
+                                    min((address + data_len - 1) % self.PAGE_SIZE + 1, self.PAGE_SIZE + 1)):
                     self.flash[page_no][offset] = next(data)
             elif page_no == end_page_no:
                 for offset in range(0, (address + data_len) % self.PAGE_SIZE + 1):
@@ -116,10 +116,11 @@ class LinbootHexEncryptor(Serpent):
         # encrypt read pages and write them in binary file
         accum = self.ivc
         with open(output_file_path, "wb") as binfile:
-            for page_no in tqdm(self.flash):
+            for page_no in tqdm(self.flash, unit='page'):
                 page_bytes = self.flash[page_no]
+                blocks_per_page = self.PAGE_SIZE // self.get_block_size()
                 assert self.PAGE_SIZE % self.get_block_size() == 0
-                for block_no in range(0, self.PAGE_SIZE // self.get_block_size()):
+                for block_no in range(0, blocks_per_page):
                     block = bytes(page_bytes[block_no*self.get_block_size():(block_no+1)*self.get_block_size()])
                     encrypted_block = self.encrypt(self.block_xor(block, accum))
                     accum = encrypted_block
@@ -128,5 +129,6 @@ class LinbootHexEncryptor(Serpent):
                 crc32_bytes = bytes(crc32(page_bytes + page_no_bytes) >> 8 * i & 0xFF for i in range(4))
                 block = page_no_bytes + crc32_bytes\
                     + urandom(self.get_block_size() - len(page_no_bytes) - len(crc32_bytes))
-                binfile.write(self.block_xor(block, accum))
-
+                encrypted_block = self.encrypt(self.block_xor(block, accum))
+                accum = encrypted_block
+                binfile.write(encrypted_block)

@@ -1,14 +1,13 @@
 #!/usr/bin/python3
 # encoding=UTF-8
 from crc8dallas import crc8
-import tqdm  # progressbar
+from tqdm import *
 import serial
-import time
 import sys
 
 
 class LinbootFlasher(serial.Serial):
-    cmd_opcodes = {"version": b'\x01', "init cypher": b'\x02', "write page": b'\x03'}
+    cmd_opcodes = {"version": b'\x01', "init cipher": b'\x02', "write page": b'\x03'}
     message_header_len = 3
     message_max_len = 148
 
@@ -26,17 +25,18 @@ class LinbootFlasher(serial.Serial):
 
     def flash(self, fw_binfile):
         with open(fw_binfile, "rb") as fw:
-            fw_image = fw.readall()
+            fw_image = fw.read()
         if len(fw_image) % self.framesize != 0:
             sys.stderr.write("[ERROR  ] Invalid firmware binary file\n")
             return
+        num_frames = len(fw_image) // self.framesize
         if self.__command(self.cmd_opcodes["init cipher"]) is None:
             sys.stderr.write("[ERROR  ] No cipher initialization ACK\n")
             return
-        for frame, frame_no in tqdm((fw_image[i*self.framesize:(i+1)*self.framesize], i)\
-                                     for i in range(len(fw_image)//self.framesize)):
-            if self.__command(self.cmd_opcodes["write page"], frame):
-                sys.stderr.write("[ERROR  ] No written flash page ACK. Page No. {0}\n".format(frame_no))
+        for frame, frame_no in tqdm(((fw_image[i*self.framesize:(i+1)*self.framesize], i) for i in range(num_frames)),
+                                    total=num_frames, unit='page'):
+            if self.__command(self.cmd_opcodes["write page"], frame) is None:
+                sys.stderr.write("[ERROR  ] No ACK. Page No. {0}\n".format(frame_no))
                 return
 
     def version(self):
@@ -54,7 +54,12 @@ class LinbootFlasher(serial.Serial):
         message = message_header + data
         message += bytes([crc8(message)])
         self.write(message)
-        # self.read(len(message))  # skip echoed bytes (bytes echo because-of LIN)
+        if True:
+            if not hasattr(self, 'once'):
+                print("[NOTE   ] Echoed bytes capturing disabled")
+                self.once = True
+        else:
+            self.read(len(message))  # skip echoed bytes (bytes echo because-of LIN)
 
     def __receive_answer(self, expected_opcode, expected_datalen=None):
         assert isinstance(expected_opcode, bytes) and len(expected_opcode) == 1
@@ -74,13 +79,13 @@ class LinbootFlasher(serial.Serial):
             return None
         lin_add = answer[0]
         if lin_add != ord(self.lin_address):
-            sys.stderr.write("[ERROR  ] Received message from unexpected LIN address: {0}\n".format(lin_add))
+            sys.stderr.write("[ERROR  ] Received answer from unexpected LIN address: {0}\n".format(lin_add))
             return
         if expected_datalen is not None and datalen != expected_datalen:
-            sys.stderr.write("[ERROR  ] Received message with unexpected data length: {0}\n".format(datalen))
+            sys.stderr.write("[ERROR  ] Received answer with unexpected data length: {0}\n".format(datalen))
             return None
         opcode = answer[2]
         if opcode != ord(expected_opcode):
-            sys.stderr.write("[ERROR  ]Received message with unexpected opcode: {0}\n".format(opcode))
+            sys.stderr.write("[ERROR  ]Received answer with unexpected opcode: {0}\n".format(opcode))
             return None
         return answer[self.message_header_len:self.message_header_len + datalen].decode('utf-8', 'ignore')
