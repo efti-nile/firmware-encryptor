@@ -16,7 +16,7 @@ def generate_secret(secret_name):
     with open(secret_name + ".inc", "w") as secret_inc:
         secret = iter(secret)
         secret_inc.write("#include <avr/pgmspace.h>\n\n"
-                         "const unsigned char key[] PROGMEM = {\n")
+                         "const unsigned char key[] = {\n")
         for i in range(4):
             secret_inc.write("\t")
             for j in range(8):

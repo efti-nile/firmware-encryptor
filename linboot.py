@@ -7,8 +7,10 @@ import argparse
 import sys
 
 # CLI arguments example
-# -i linboot.hex -o linboot-encr.bin -s secret_test.bin encrypt
-# -i linboot-encr.bin --serial COM8 --lin 0x02 flash
+# -o test-data/secret generate_secret
+# -i test-data/ipgrv31.hex -o  test-data/ipgrv31-encr.bin -s  test-data/secret.bin encrypt
+# -i test-data/ipgrv31-encr.bin --serial COM4 --lin 0x02 flash
+# --serial COM4 --lin 0x02 bootloader_version
 
 
 __version__ = "1.0.0.A"

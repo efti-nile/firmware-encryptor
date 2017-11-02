@@ -15,6 +15,7 @@ class LinbootHexEncryptor(Serpent):
     """
     PAGE_SIZE = 128  # flash page size, must be multiple by cipher block size (!)
     FILLER = 0xFF  # value for padding unused flash
+    FW_SIZE_ADD = 0xB6;
 
     def __init__(self, key, ivc):
         """
@@ -109,10 +110,17 @@ class LinbootHexEncryptor(Serpent):
         :param output_file_path: output binary file for encrypted firmware
         :return:
         """
+        fw_size = 0;
         # read hex file
         with open(input_file_path, "r") as hexfile:
             for hexline in self.read_hexlines(hexfile):
                 self.flash_write(hexline["address"], hexline["data"])
+                if hexline["address"] + len(hexline["data"]) > fw_size:
+                    fw_size = hexline["address"] + len(hexline["data"]) + 1
+        if fw_size % 2 == 1:
+            fw_size += 1
+        self.flash_write(self.FW_SIZE_ADD, bytes([fw_size & 0xFF, fw_size >> 8 & 0xFF]))
+        print("Firmware size in byte: {0}".format(fw_size))
         # encrypt read pages and write them in binary file
         accum = self.ivc
         with open(output_file_path, "wb") as binfile:

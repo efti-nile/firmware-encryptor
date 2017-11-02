@@ -54,7 +54,7 @@ class LinbootFlasher(serial.Serial):
         message = message_header + data
         message += bytes([crc8(message)])
         self.write(message)
-        if True:
+        if False:
             if not hasattr(self, 'once'):
                 print("[NOTE   ] Echoed bytes capturing disabled")
                 self.once = True
