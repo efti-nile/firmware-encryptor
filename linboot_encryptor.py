@@ -3,7 +3,7 @@
 from pyserpent import Serpent
 from os import urandom
 from binascii import crc32
-from tqdm import *  # progressbar
+from progbar import ProgBar  # progressbar
 import sys  # stderr
 
 
@@ -15,7 +15,7 @@ class LinbootHexEncryptor(Serpent):
     """
     PAGE_SIZE = 128  # flash page size, must be multiple by cipher block size (!)
     FILLER = 0xFF  # value for padding unused flash
-    FW_SIZE_ADD = 0xB6;
+    FW_SIZE_ADD = 0xB6
 
     def __init__(self, key, ivc):
         """
@@ -68,12 +68,13 @@ class LinbootHexEncryptor(Serpent):
             check_sum_actual = (~((data_len+address_msb+address_lsb+record_type+sum(data)) & 0x00FF) + 1) & 0xFF
             if check_sum != check_sum_actual:
                 if strict_check_sum:
-                    raise ValueError("Check sum violation in input hex-file\nline: "
-                                     "\"{0}\"\ncalculated check sum: {1}\n"
-                                     "expected check sum: {2}".format(line.strip(), check_sum_actual, check_sum))
+                    sys.stdout.write("Неверная контрольная сумма в HEX-файле\nстрока: "
+                                     "\"{0}\"\nпосчитанная контрольная сумма: {1}\n"
+                                     "контрольная сумма в файле: {2}".format(line.strip(), check_sum_actual, check_sum))
+                    raise ValueError()
                 else:
-                    sys.stderr.write("[WARNING] {0} "
-                                     "Check sum violation met in input hex file, be careful!\n".format(hex(address)))
+                    sys.stdout.write("[WARNING] {0} "
+                                     "Несоответсвие контрольной суммы!\n".format(hex(address)))
             return {"data_len": data_len, "address": address, "record_type": record_type, "data": data}
         else:
             return None  # EOF
@@ -120,11 +121,13 @@ class LinbootHexEncryptor(Serpent):
         if fw_size % 2 == 1:
             fw_size += 1
         self.flash_write(self.FW_SIZE_ADD, bytes([fw_size & 0xFF, fw_size >> 8 & 0xFF]))
-        print("Firmware size in byte: {0}".format(fw_size))
+        sys.stdout.write("[INFO   ] Размер прошивки в байтах: {0}\n".format(fw_size))
         # encrypt read pages and write them in binary file
         accum = self.ivc
         with open(output_file_path, "wb") as binfile:
-            for page_no in tqdm(self.flash, unit='page'):
+            pb = ProgBar(" Шифрование {0} страниц флеш-памяти ".format(len(self.flash)))
+            for page_no in self.flash:
+                pb.update(page_no / len(self.flash))
                 page_bytes = self.flash[page_no]
                 blocks_per_page = self.PAGE_SIZE // self.get_block_size()
                 assert self.PAGE_SIZE % self.get_block_size() == 0
@@ -140,3 +143,5 @@ class LinbootHexEncryptor(Serpent):
                 encrypted_block = self.encrypt(self.block_xor(block, accum))
                 accum = encrypted_block
                 binfile.write(encrypted_block)
+            pb.close()
+        sys.stdout.write("[INFO   ] Готово\n")

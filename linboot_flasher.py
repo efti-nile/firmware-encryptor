@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # encoding=UTF-8
 from crc8dallas import crc8
-from tqdm import *
+from progbar import ProgBar
 import serial
 import sys
 
@@ -12,32 +12,39 @@ class LinbootFlasher(serial.Serial):
     message_max_len = 148
 
     def __init__(self, *args, framesize=144):
-        super().__init__(*args, timeout=1)
+        try:
+            super().__init__(*args, timeout=1)
+        except serial.serialutil.SerialException:
+            sys.stdout.write("Не удалось открыть указанный COM-порт\n")
+            raise
         self.framesize = framesize
         self.lin_address = None
-        pass
 
     def set_lin_address(self, lin_address):
         if lin_address <= 0 or lin_address > 255:
-            raise ValueError("Specified LIN-address {0} incorrect. ".format(lin_address) +
-                             "Must be less than 256 and grater than 0")
+            sys.stdout.write("Указанный LIN-адрес {0} некорректен\n".format(hex(lin_address)) +
+                             "Должен быть меньше 256 и больше 0\n")
+            raise ValueError()
         self.lin_address = bytes([lin_address])
 
     def flash(self, fw_binfile):
         with open(fw_binfile, "rb") as fw:
             fw_image = fw.read()
         if len(fw_image) % self.framesize != 0:
-            sys.stderr.write("[ERROR  ] Invalid firmware binary file\n")
-            return
+            sys.stdout.write("[ERROR  ] Некооректный шифр-образ прошивки\n")
+            raise RuntimeError()
         num_frames = len(fw_image) // self.framesize
         if self.__command(self.cmd_opcodes["init cipher"]) is None:
-            sys.stderr.write("[ERROR  ] No cipher initialization ACK\n")
-            return
-        for frame, frame_no in tqdm(((fw_image[i*self.framesize:(i+1)*self.framesize], i) for i in range(num_frames)),
-                                    total=num_frames, unit='page'):
+            sys.stdout.write("[ERROR  ] Нет подтверждения начала сеанса\n")
+            raise RuntimeError()
+        pb = ProgBar(' Загрузка {0} страниц флеш-памяти '.format(num_frames))
+        for frame, frame_no in ((fw_image[i*self.framesize:(i+1)*self.framesize], i) for i in range(num_frames)):
+            pb.update(frame_no / num_frames)
             if self.__command(self.cmd_opcodes["write page"], frame) is None:
-                sys.stderr.write("[ERROR  ] No ACK. Page No. {0}\n".format(frame_no))
-                return
+                sys.stdout.write("[ERROR  ] Не получено подтверждение записи страницы №{0}\n".format(frame_no))
+                raise RuntimeError()
+        pb.close()
+        sys.stdout.write("[INFO   ] Готово\n")
 
     def version(self):
         return self.__command(self.cmd_opcodes["version"])
@@ -56,7 +63,7 @@ class LinbootFlasher(serial.Serial):
         self.write(message)
         if False:
             if not hasattr(self, 'once'):
-                print("[NOTE   ] Echoed bytes capturing disabled")
+                sys.stdout.write("[NOTE   ] Пропуск эхо-байт отключен")
                 self.once = True
         else:
             self.read(len(message))  # skip echoed bytes (bytes echo because-of LIN)
@@ -70,22 +77,22 @@ class LinbootFlasher(serial.Serial):
             bytes_to_receive = self.message_max_len
         answer = self.read(bytes_to_receive)
         if len(answer) < self.message_header_len:
-            sys.stderr.write("[ERROR  ] Header not received\n")
-            return None
+            sys.stdout.write("[ERROR  ] Заголовок пакета не получен\n")
+            raise RuntimeError()
         datalen = answer[1]
         answer = answer[:self.message_header_len + datalen + 1]
         if crc8(answer[:-1]) != answer[-1]:
-            sys.stderr.write("[ERROR  ] CRC check failed\n")
-            return None
+            sys.stdout.write("[ERROR  ] Проверка CRC провалена\n")
+            raise RuntimeError()
         lin_add = answer[0]
         if lin_add != ord(self.lin_address):
-            sys.stderr.write("[ERROR  ] Received answer from unexpected LIN address: {0}\n".format(lin_add))
-            return
+            sys.stdout.write("[ERROR  ] Получен пакет с неожиданного LIN-адреса: {0}\n".format(lin_add))
+            raise RuntimeError()
         if expected_datalen is not None and datalen != expected_datalen:
-            sys.stderr.write("[ERROR  ] Received answer with unexpected data length: {0}\n".format(datalen))
-            return None
+            sys.stdout.write("[ERROR  ] Получен пакет с неожиданной длинной: {0}\n".format(datalen))
+            raise RuntimeError()
         opcode = answer[2]
         if opcode != ord(expected_opcode):
-            sys.stderr.write("[ERROR  ]Received answer with unexpected opcode: {0}\n".format(opcode))
-            return None
+            sys.stdout.write("[ERROR  ] Получен пакет с неожиданным опкодом: {0}\n".format(opcode))
+            raise RuntimeError()
         return answer[self.message_header_len:self.message_header_len + datalen].decode('utf-8', 'ignore')

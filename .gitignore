@@ -1,10 +1,13 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+test-data-2/
 *.py[cod]
 *$py.class
 *.hex
 *.inc
 *.bin
+settings.json
+temp/
 
 # C extensions
 *.so

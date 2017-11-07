@@ -1,5 +1,5 @@
 import os  # true random
-
+import sys
 
 def generate_secret(secret_name):
     """
@@ -13,6 +13,7 @@ def generate_secret(secret_name):
     secret = os.urandom(256//8+128//8)
     with open(secret_name + ".bin", "wb") as secret_binfile:
         secret_binfile.write(secret)
+    sys.stdout.write('[INFO   ] Создан ключ {0}\n'.format(secret_name + ".bin"))
     with open(secret_name + ".inc", "w") as secret_inc:
         secret = iter(secret)
         secret_inc.write("#include <avr/pgmspace.h>\n\n"
@@ -39,3 +40,5 @@ def generate_secret(secret_name):
                 else:
                     secret_inc.write("\n")
         secret_inc.write("};\n")
+    sys.stdout.write('[INFO   ] Создан заголовочный файл {0}\n'.format(secret_name + ".inc"))
+    sys.stdout.write("[INFO   ] Готово\n")
