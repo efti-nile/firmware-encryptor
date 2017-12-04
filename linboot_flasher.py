@@ -7,9 +7,10 @@ import sys
 
 
 class LinbootFlasher(serial.Serial):
-    cmd_opcodes = {"version": b'\x01', "init cipher": b'\x02', "write page": b'\x03'}
+    cmd_opcodes = {"version": b'\x01', "init cipher": b'\x02', "write page": b'\x03', "keep alive": b'\x06'}
     message_header_len = 3
     message_max_len = 148
+    mask_header_error = False
 
     def __init__(self, *args, framesize=144):
         try:
@@ -27,6 +28,24 @@ class LinbootFlasher(serial.Serial):
             raise ValueError()
         self.lin_address = bytes([lin_address])
 
+    def catch_linboot(self, timeout=60):
+        self.mask_header_error = True
+        pb = ProgBar(' Ожидание ответа загрузчика ')
+        for t in range(timeout):
+            try:
+                if self.__command(self.cmd_opcodes["keep alive"]) is not None:
+                    pb.close()
+                    sys.stdout.write("Загрузчик подключен\n")
+                    self.mask_header_error = False
+                    return True
+            except RuntimeError:
+                pass
+            pb.update(t / timeout)
+        pb.close()
+        self.mask_header_error = False
+        sys.stdout.write("[ERROR  ] Время ожидания истекло\n")
+        return False
+
     def flash(self, fw_binfile):
         with open(fw_binfile, "rb") as fw:
             fw_image = fw.read()
@@ -34,6 +53,8 @@ class LinbootFlasher(serial.Serial):
             sys.stdout.write("[ERROR  ] Некооректный шифр-образ прошивки\n")
             raise RuntimeError()
         num_frames = len(fw_image) // self.framesize
+        if not self.catch_linboot():
+            return
         if self.__command(self.cmd_opcodes["init cipher"]) is None:
             sys.stdout.write("[ERROR  ] Нет подтверждения начала сеанса\n")
             raise RuntimeError()
@@ -77,7 +98,8 @@ class LinbootFlasher(serial.Serial):
             bytes_to_receive = self.message_max_len
         answer = self.read(bytes_to_receive)
         if len(answer) < self.message_header_len:
-            sys.stdout.write("[ERROR  ] Заголовок пакета не получен\n")
+            if not self.mask_header_error:  # mask error if we only need to probe the bootloader, not to communicate
+                sys.stdout.write("[ERROR  ] Заголовок пакета не получен\n")
             raise RuntimeError()
         datalen = answer[1]
         answer = answer[:self.message_header_len + datalen + 1]

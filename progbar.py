@@ -6,15 +6,15 @@ class ProgBar:
 
     def __init__(self, text=''):
         text_len = len(text)
-        assert(len(text) < round(self.WIDTH * 0.8))
+        assert text_len < round(self.WIDTH * 0.8)
         beg = (self.WIDTH - text_len) // 2
         end = beg + text_len
         line = '|' + '-' * (beg - 1) + text + '-' * (self.WIDTH - end - 1) + '|\n'
-        sys.stdout.write(str(line))
+        sys.stdout.write(line)
         self.num_of_bars = 0
 
     def update(self, prog):
-        assert(0.0 <= prog <= 1.0)
+        assert 0.0 <= prog <= 1.0
         num_bars_to_add = round(self.WIDTH * prog) - self.num_of_bars
         sys.stdout.write('|' * num_bars_to_add)
         sys.stdout.flush()

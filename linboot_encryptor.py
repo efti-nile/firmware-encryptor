@@ -120,7 +120,9 @@ class LinbootHexEncryptor(Serpent):
                     fw_size = hexline["address"] + len(hexline["data"]) + 1
         if fw_size % 2 == 1:
             fw_size += 1
-        self.flash_write(self.FW_SIZE_ADD, bytes([fw_size & 0xFF, fw_size >> 8 & 0xFF]))
+        # Программа ЦМСР по-своему определяет размер прошивки. Именно его и надо вбивать в исходный код приложения в
+        # INFO-блок по адресу self.FW_SIZE_ADD. Поэтому строчка закомментирована.
+        # self.flash_write(self.FW_SIZE_ADD, bytes([fw_size & 0xFF, fw_size >> 8 & 0xFF]))
         sys.stdout.write("[INFO   ] Размер прошивки в байтах: {0}\n".format(fw_size))
         # encrypt read pages and write them in binary file
         accum = self.ivc

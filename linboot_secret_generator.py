@@ -28,7 +28,7 @@ def generate_secret(secret_name):
                     secret_inc.write(",\n")
                 else:
                     secret_inc.write("\n")
-        secret_inc.write("};\n\nconst unsigned char iv[] PROGMEM = {\n")
+        secret_inc.write("};\n\nconst unsigned char iv[] = {\n")
         for i in range(2):
             secret_inc.write("\t")
             for j in range(8):
