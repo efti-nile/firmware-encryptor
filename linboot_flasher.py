@@ -7,14 +7,16 @@ import sys
 
 
 class LinbootFlasher(serial.Serial):
-    cmd_opcodes = {"version": b'\x01', "init cipher": b'\x02', "write page": b'\x03', "keep alive": b'\x06'}
+    cmd_opcodes = {"version": b'\x01', "init cipher": b'\x02', "write page": b'\x03', "keep alive": b'\x06',
+                   "commit flash": b'\x07'}
     message_header_len = 3
     message_max_len = 148
     mask_header_error = False
 
     def __init__(self, *args, framesize=144):
         try:
-            super().__init__(*args, timeout=1)
+            self.lin_rx_timeout = 1
+            super().__init__(*args, timeout=self.lin_rx_timeout)
         except serial.serialutil.SerialException:
             sys.stdout.write("Не удалось открыть указанный COM-порт\n")
             raise
@@ -31,16 +33,16 @@ class LinbootFlasher(serial.Serial):
     def catch_linboot(self, timeout=60):
         self.mask_header_error = True
         pb = ProgBar(' Ожидание ответа загрузчика ')
-        for t in range(timeout):
+        for t in range(round(timeout / self.lin_rx_timeout)):
             try:
                 if self.__command(self.cmd_opcodes["keep alive"]) is not None:
                     pb.close()
-                    sys.stdout.write("Загрузчик подключен\n")
+                    sys.stdout.write("[INFO   ] Загрузчик подключен\n")
                     self.mask_header_error = False
                     return True
             except RuntimeError:
                 pass
-            pb.update(t / timeout)
+            pb.update(t / (timeout / self.lin_rx_timeout))
         pb.close()
         self.mask_header_error = False
         sys.stdout.write("[ERROR  ] Время ожидания истекло\n")
@@ -65,7 +67,22 @@ class LinbootFlasher(serial.Serial):
                 sys.stdout.write("[ERROR  ] Не получено подтверждение записи страницы №{0}\n".format(frame_no))
                 raise RuntimeError()
         pb.close()
-        sys.stdout.write("[INFO   ] Готово\n")
+        pb = ProgBar('Ожидаем подтверждения записи во флеш ')
+        self.mask_header_error = True
+        timeout = 10
+        for t in range(round(timeout / self.lin_rx_timeout)):
+            try:
+                if self.__command(self.cmd_opcodes["commit flash"]) is not None:
+                    pb.close()
+                    sys.stdout.write("[INFO   ] Подтверждение получено\n")
+                    self.mask_header_error = False
+                    return True
+            except RuntimeError:
+                pass
+            pb.update(t / (timeout / self.lin_rx_timeout))
+        pb.close()
+        self.mask_header_error = False
+        sys.stdout.write("[ERROR  ] Подтверждение не получено\n".format(frame_no))
 
     def version(self):
         return self.__command(self.cmd_opcodes["version"])
@@ -115,6 +132,7 @@ class LinbootFlasher(serial.Serial):
             raise RuntimeError()
         opcode = answer[2]
         if opcode != ord(expected_opcode):
-            sys.stdout.write("[ERROR  ] Получен пакет с неожиданным опкодом: {0}\n".format(opcode))
+            if not self.mask_header_error:  # mask error if we only need to probe the bootloader, not to communicate
+                sys.stdout.write("[ERROR  ] Получен пакет с неожиданным опкодом: {0}\n".format(opcode))
             raise RuntimeError()
         return answer[self.message_header_len:self.message_header_len + datalen].decode('utf-8', 'ignore')

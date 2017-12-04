@@ -229,25 +229,29 @@ class LinbootGui(Tk):
         self.output_updater()
 
     def flash(self):
-        if self.infile_type.get() == 'enc_hex_selector':
-            if not os.path.isfile(self.enc_hex_file.get()):
+        if self.infile_type.get() == 'enc_hex_selector' or self.flash_schedule:
+            if not self.flash_schedule and not os.path.isfile(self.enc_hex_file.get()):
                 showerror(title='Ошибка', message='Файл {0} не существует'.format(self.enc_hex_file.get()))
                 return
 
-            self.output.delete('1.0', END)
+            if not self.flash_schedule:
+                self.output.delete('1.0', END)
+
+            self.flash_schedule = False
 
             self.start_subprocess(['python', 'linboot.py',
-                                   '-i', self.enc_hex_file.get(),
+                                   '-i', self.enc_hex_file.get() if not self.flash_schedule else self.TEMP_ENC_BIN,
                                    '--serial', self.serial_string.get(),
                                    '--lin', self.lin_address.get(),
                                    'flash'],
                                   stdout=PIPE, stderr=PIPE, stdin=PIPE,
                                   bufsize=1, close_fds=ON_POSIX)
 
-            self.settings['enc_hex_file'] = self.enc_hex_file.get()
+            if not self.flash_schedule:
+                self.settings['enc_hex_file'] = self.enc_hex_file.get()
             self.settings['serial_string'] = self.serial_string.get()
             self.settings['lin_address'] = self.lin_address.get()
-        elif self.infile_type.get() == 'enc_hex_selector':
+        elif self.infile_type.get() == 'raw_hex_selector':
             if not os.path.isfile(self.raw_hex_file.get()):
                 showerror(title='Ошибка', message='Файл {0} не существует'.format(self.raw_hex_file.get()))
                 return
@@ -317,6 +321,8 @@ class LinbootGui(Tk):
             self.after(500, self.output_updater)
         else:
             self.subproc_run = False
+            if self.flash_schedule:
+                self.after(2000, self.flash)
 
     def on_closing(self):
         with open(self.SETTINGS_FILE, 'w') as file:
