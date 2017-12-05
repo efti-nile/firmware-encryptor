@@ -37,6 +37,10 @@ class AsyncUtf8FileReader(Thread):
 
 class LinbootGui(Tk):
     SETTINGS_FILE = 'settings.json'
+    LINBOOT_EXE_PATH = './linboot/linboot.exe'
+    LINBOOT_PY_PATH = 'linboot.py'
+    PYTHON_INTERPRETER = 'python'
+
     DEFAULT_SERIAL_PORT = 'COM1'
     DEFAULT_LIN_ADDRESS = 0x02
     DEFAULT_BAUD_RATE = 9600
@@ -220,9 +224,16 @@ class LinbootGui(Tk):
         for child in parent.winfo_children():
             child.config(state=state)
 
-    def start_subprocess(self, command, **kwargs):
+    def start_subprocess(self, cli_args, **kwargs):
+        if os.path.isfile(self.LINBOOT_PY_PATH):
+            cli_line = [self.PYTHON_INTERPRETER, self.LINBOOT_PY_PATH] + cli_args
+        elif os.path.isfile(self.LINBOOT_EXE_PATH):
+            cli_line = [self.LINBOOT_EXE_PATH] + cli_args
+        else:
+            showerror(title='Ошибка', message='linboot не найден')
+            return
         self.subproc_run = True
-        self.subproc = Popen(command, **kwargs)
+        self.subproc = Popen(cli_line, **kwargs)
         self.queue = Queue()
         self.reader = AsyncUtf8FileReader(self.subproc.stdout, self.queue)
         self.reader.start()
@@ -239,8 +250,7 @@ class LinbootGui(Tk):
 
             self.flash_schedule = False
 
-            self.start_subprocess(['python', 'linboot.py',
-                                   '-i', self.enc_hex_file.get() if not self.flash_schedule else self.TEMP_ENC_BIN,
+            self.start_subprocess(['-i', self.enc_hex_file.get() if not self.flash_schedule else self.TEMP_ENC_BIN,
                                    '--serial', self.serial_string.get(),
                                    '--lin', self.lin_address.get(),
                                    'flash'],
@@ -262,7 +272,7 @@ class LinbootGui(Tk):
             if not os.path.isdir(self.TEMP_DIR):
                 os.mkdir(self.TEMP_DIR)
 
-            self.start_subprocess(['python', 'linboot.py',
+            self.start_subprocess([self.LINBOOT_EXE_PATH,
                                    '-i', self.raw_hex_file.get(),
                                    '-o', self.TEMP_ENC_BIN,
                                    '-s', self.secret_file.get(),
@@ -288,8 +298,7 @@ class LinbootGui(Tk):
 
         self.output.delete('1.0', END)
 
-        self.start_subprocess(['python', 'linboot.py',
-                               '-i', self.hex_file.get(),
+        self.start_subprocess(['-i', self.hex_file.get(),
                                '-o', self.enc_hex_dir.get() + '/' + os.path.split(self.hex_file.get())[1] + '.bin',
                                '-s', self.secret_file.get(),
                                'encrypt'],
@@ -307,8 +316,7 @@ class LinbootGui(Tk):
 
         self.output.delete('1.0', END)
 
-        self.start_subprocess(['python', 'linboot.py',
-                               '-o', os.path.join(self.secret_dir.get() + '/', self.secret_name.get()),
+        self.start_subprocess(['-o', os.path.join(self.secret_dir.get() + '/', self.secret_name.get()),
                                'generate_secret'],
                               stdout=PIPE, stderr=PIPE, stdin=PIPE,
                               bufsize=1, close_fds=ON_POSIX)

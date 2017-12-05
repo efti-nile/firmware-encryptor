@@ -68,13 +68,13 @@ class LinbootHexEncryptor(Serpent):
             check_sum_actual = (~((data_len+address_msb+address_lsb+record_type+sum(data)) & 0x00FF) + 1) & 0xFF
             if check_sum != check_sum_actual:
                 if strict_check_sum:
-                    sys.stdout.write("Неверная контрольная сумма в HEX-файле\nстрока: "
-                                     "\"{0}\"\nпосчитанная контрольная сумма: {1}\n"
-                                     "контрольная сумма в файле: {2}".format(line.strip(), check_sum_actual, check_sum))
+                    sys.stdout.write("Incorrect check sum in HEX-file\nline: "
+                                     "\"{0}\"\ncalculated check sum: {1}\n"
+                                     "check sum in file: {2}".format(line.strip(), check_sum_actual, check_sum))
                     raise ValueError()
                 else:
                     sys.stdout.write("[WARNING] {0} "
-                                     "Несоответсвие контрольной суммы!\n".format(hex(address)))
+                                     "Incorrect check sum!\n".format(hex(address)))
             return {"data_len": data_len, "address": address, "record_type": record_type, "data": data}
         else:
             return None  # EOF
@@ -123,11 +123,11 @@ class LinbootHexEncryptor(Serpent):
         # Программа ЦМСР по-своему определяет размер прошивки. Именно его и надо вбивать в исходный код приложения в
         # INFO-блок по адресу self.FW_SIZE_ADD. Поэтому строчка закомментирована.
         # self.flash_write(self.FW_SIZE_ADD, bytes([fw_size & 0xFF, fw_size >> 8 & 0xFF]))
-        sys.stdout.write("[INFO   ] Размер прошивки в байтах: {0}\n".format(fw_size))
+        sys.stdout.write("[INFO   ] Firmware size in bytes: {0}\n".format(fw_size))
         # encrypt read pages and write them in binary file
         accum = self.ivc
         with open(output_file_path, "wb") as binfile:
-            pb = ProgBar(" Шифрование {0} страниц флеш-памяти ".format(len(self.flash)))
+            pb = ProgBar(" Encrypting {0} pages of flash ".format(len(self.flash)))
             for page_no in self.flash:
                 pb.update(page_no / len(self.flash))
                 page_bytes = self.flash[page_no]
@@ -146,4 +146,4 @@ class LinbootHexEncryptor(Serpent):
                 accum = encrypted_block
                 binfile.write(encrypted_block)
             pb.close()
-        sys.stdout.write("[INFO   ] Готово\n")
+        sys.stdout.write("[INFO   ] Done\n")
