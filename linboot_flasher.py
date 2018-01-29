@@ -8,7 +8,8 @@ import sys
 
 class LinbootFlasher(serial.Serial):
     cmd_opcodes = {"version": b'\x01', "init cipher": b'\x02', "write page": b'\x03', "keep alive": b'\x06',
-                   "commit flash": b'\x07'}
+                   "commit flash": b'\x07', "check red key": b'\x09'}
+    data_constants = {"red key correct": "1", "red key incorrect": "0"}
     message_header_len = 3
     message_max_len = 148
     mask_header_error = False
@@ -48,6 +49,29 @@ class LinbootFlasher(serial.Serial):
         sys.stdout.write("[ERROR  ] Timeout elapsed\n")
         return False
 
+    def check_red_key(self, timeout=60):
+        self.mask_header_error = True
+        pb = ProgBar(' Waiting red key ')
+        for t in range(round(timeout / self.lin_rx_timeout)):
+            try:
+                ans = self.__command(self.cmd_opcodes["check red key"])
+                if ans is not None:
+                    pb.close()
+                    self.mask_header_error = False
+                    if ans == self.data_constants["red key correct"]:
+                        sys.stdout.write("[INFO   ] Red key checked\n")
+                        return True
+                    else:
+                        sys.stdout.write("[ERROR  ] Red key incorrect\n")
+                        return False
+            except RuntimeError:
+                pass
+            pb.update(t / (timeout / self.lin_rx_timeout))
+        pb.close()
+        self.mask_header_error = False
+        sys.stdout.write("[ERROR  ] Timeout elapsed\n")
+        return False
+
     def flash(self, fw_binfile):
         with open(fw_binfile, "rb") as fw:
             fw_image = fw.read()
@@ -56,6 +80,8 @@ class LinbootFlasher(serial.Serial):
             raise RuntimeError()
         num_frames = len(fw_image) // self.framesize
         if not self.catch_linboot():
+            return
+        if not self.check_red_key():
             return
         if self.__command(self.cmd_opcodes["init cipher"]) is None:
             sys.stdout.write("[ERROR  ] Cypher not initialized\n")
